@@ -1,0 +1,60 @@
+#!/bin/bash
+
+function usage {
+    cat <<EOF
+Usage: $0 [OPTION]... [VAR=VALUE]...
+
+Configuration:
+  -h, --help              display this help and exit
+  -p, --prefix            specify the install path
+  -d, --blas-root         specify the compiled blas bin/lib/include path
+
+EOF
+}
+
+prefix=
+blas_root=
+while [ $# -gt 0 ];
+do
+  case "$1" in
+  --help | -h)
+    usage; exit 0 ;;
+  --prefix=* | -p=*)
+    prefix=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  --blas-root=* | -d=*)
+    blas_root=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  *)  echo "Unknown argument: $1, exiting"; usage; exit 1 ;;
+  esac
+done
+
+if [ -z $prefix ]; then
+    prefix=/usr/local
+fi
+
+prefix=${prefix/#~/$HOME}
+blas_root=${blas_root/#~/$HOME}
+mkdir -p $prefix
+if ! which realpath >&/dev/null; then
+    prefix=`readlink -f $prefix`
+    if [ ! -z $blas_root ]; then
+        blas_root=`readlink -f $blas_root`
+    fi
+else
+    prefix=`realpath $prefix`
+    if [ ! -z $blas_root ]; then
+        blas_root=`realpath $blas_root`
+    fi
+fi
+
+echo PREFIX:$prefix
+echo BLAS_ROOT:$blas_root
+
+cat > Makefile.inc <<EOF
+PREFIX=$prefix
+BLAS_ROOT=$blas_root
+CXXFLAGS= -std=c++11 -fPIC -O2
+EOF
+
+
