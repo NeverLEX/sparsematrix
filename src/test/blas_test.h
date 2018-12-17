@@ -97,7 +97,7 @@ private:
     std::vector<std::string> func_names_;
 };
 
-static bool g_check_matrix = false;
+static bool g_check_matrix = true;
 static TimeStatis g_time_statis;
 
 /*
@@ -144,6 +144,17 @@ void gen_sparse_matrix_random(int m, int n, int stride, float percent, sblas::Sp
     }
     sparse_matrix.CopyForm(index, m, n, stride, table, 255, sblas::SblasTrans);
     if (table) free(table), table = nullptr;
+}
+
+template<typename type_t>
+void PrintMatirx(type_t *a, int m, int n, int stride) {
+    for (int i=0; i<m; i++) {
+        std::cout << (i==0 ? "[" : " ");
+        for (int j=0; j<n; j++) {
+            std::cout << a[i*stride + j] << (i==m-1 && j==n-1 ? "" : ", ");
+        }
+        std::cout << (i==m-1 ? "]" : "") << std::endl;
+    }
 }
 
 template<typename result_t>
@@ -212,23 +223,24 @@ void sgemm_random_invoker_sparse(int m, int n, int k, float alpha, float beta, c
     sblas::SparseMatrix<uint8, uint8, type_t> sparse_matrix_b;
     gen_sparse_matrix_random<type_t, uint8>(n, ldb, ldb, 0.75f, sparse_matrix_b);
     if (g_check_matrix) {
-        sparse_matrix_b.CopyTo(b, ldb);
+        sparse_matrix_b.CopyTo(b, ldb, sblas::SblasTrans);
         gen_matrix_random(check, m, ldc);
         for (int i=0; i<m*ldc; i++) check[i] = c[i];
-        int32 count  = 0;
-        for (int32 i=0; i<n*ldb; i++) {
-            if (b[i] == 0) count ++;
-        }
-        std::cout << double(count)/n/ldb << std::endl;
     }
+    //PrintMatirx(a, m, k, lda);
+    //PrintMatirx(b, n, k, ldb);
     utility::Timer tm;
     //for (int i=0; i<10; i++) {
+        //PrintMatirx(c, m, n, ldc);
         sparse_matrix_b.AddMatMat(a, m, k/*lda*/, c, n/*ldc*/, alpha, beta);
+        //PrintMatirx(c, m, n, ldc);
         //sgemm_func(m, n, k, a, b, c, alpha, beta);
     //}
     g_time_statis.SaveTimeInfo(func_name, m, n, k, tm.elapsed_ms());
     if (g_check_matrix) {
+        //PrintMatirx(check, m, n, ldc);
         cblas_sgemm_baseline(m, n, k, a, b, check, alpha, beta);
+        //PrintMatirx(check, m, n, ldc);
         sgemm_check(func_name, c, check, m*n);
         free(check), check = nullptr;
     }
@@ -298,7 +310,7 @@ void sgemm_random_invoker_ex(int m, int n, int k, float alpha, float beta,
         for (int i=arg_m.Begin(); i<=arg_m.End(); i<<=1) { \
             for (int j=arg_n.Begin(); j<=arg_n.End(); j<<=1) { \
                 for (int k=arg_k.Begin(); k<=arg_k.End(); k<<=1) { \
-                    blas_common::sgemm_random_invoker_sparse<float, float>(i, j, k, 1.8f, 1.2f, "sgemm_sparse"); \
+                    blas_common::sgemm_random_invoker_sparse<float, float>(i, j, k, 1.0f, 1.0f, "sgemm_sparse"); \
                 } \
             } \
         } \

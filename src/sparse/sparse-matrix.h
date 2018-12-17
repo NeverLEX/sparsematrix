@@ -5,6 +5,8 @@
 #include <iostream>
 #include <cassert>
 #include <vector>
+#include <stdio.h>
+#include <string.h>
 
 #define SBLAS_ASSERT assert
 #define SBLAS_MALLOC malloc
@@ -35,7 +37,7 @@ public:
 
     void Destroy();
     void CopyForm(ValIndex_t *density_matrix, int32 rows, int32 cols, int32 stride, Value_t *vals, int32 val_table_size, SBLAS_TRANSPOSE trans = SblasNoTrans);
-    void CopyTo(Value_t *density_matrix, int32 stride);
+    void CopyTo(Value_t *density_matrix, int32 stride, SBLAS_TRANSPOSE trans = SblasNoTrans);
     void AddMatMat(Value_t *a, int32 m, int32 lda, Value_t *c, int32 ldc, Value_t alpha, Value_t beta);
 
     int32 NumRows() const { return rows_; }
