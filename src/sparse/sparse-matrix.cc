@@ -152,6 +152,7 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::AddMatMat
         void *p_tmp = nullptr;
         p_tmp = SBLAS_MEMALIGN(8, 2*aligned_m*matrix_block_width*sizeof(Value_t), &p_tmp);
         Value_t *sa = (Value_t*)p_tmp, *sc = sa ? sa + aligned_m*matrix_block_width : nullptr;
+        int32 prev_row_off = -1;
         for (int32 i=0; i<block_bounds_.size(); i++) {
             const int32 row_off = block_bounds_[i].first;
             const int32 col_off = block_bounds_[i].second;
@@ -159,10 +160,20 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::AddMatMat
             const int32 col_width = cols_ - col_off >= matrix_block_width ? matrix_block_width : cols_ - col_off;
             const int32 start = block_index_bounds_[i].first;
             const int32 end = block_index_bounds_[i].second;
-            // m, n, k, a, lda, c, ldc, alpha, pos, val, val_table
-            sblas_kernel_operation<PosIndex_t, ValIndex_t, Value_t, block_width_shift>(m, col_width, row_width,
-                                    &a[row_off], lda, sa, aligned_m, &c[col_off], ldc, sc, aligned_m,
+            //std::cout << "row off:" << row_off << ", col off:" << col_off << std::endl;
+            //std::cout << "row width:" << row_width << ", col width:" << col_width << std::endl;
+            //std::cout << "start:" << start << ", end:" << end << std::endl;
+            
+            if (prev_row_off != row_off) {
+                sblas_trans_kernel(&a[row_off], m, row_width/*k*/, lda, sa, aligned_m/*ldsa*/); // trans a
+                prev_row_off = row_off;              
+            }
+            sblas_trans_kernel(&c[col_off], m, col_width/*n*/, ldc, sc, aligned_m/*ldsc*/); // trans c
+            // C^T = B^T * A^T
+            sblas_kernel_operation_trans<PosIndex_t, ValIndex_t, Value_t, block_width_shift>(m, col_width, row_width,
+                                    sa, aligned_m/*ldsa*/, sc, aligned_m/*ldsc*/,
                                     alpha, &ppos[start], &pval[start], end-start, &val_table_[0], valid_table_size);
+            sblas_trans_kernel(sc, col_width/*n*/, m, aligned_m/*ldsc*/, &c[col_off], ldc); // trans c
         }
         SBLAS_MEMALIGN_FREE(p_tmp)
     }

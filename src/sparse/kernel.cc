@@ -179,6 +179,55 @@ void sblas_trans_kernel(type_t* a, int m, int n, int lda, type_t* sa, int ldsa) 
     }
 }
 
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int block_width_shift>
+void sblas_kernel_operation_naive(int m, int n, int k, Value_t *a, int lda, Value_t *c, int ldc,
+    Value_t alpha, PosIndex_t* ppos, ValIndex_t* pval, int pos_len, Value_t *val_table, int valid_table_size) {
+    const int align_value = (1<<block_width_shift) - 1;
+    int pos_offset = 0;
+    for (int i=0; i<pos_len; i++) {
+        pos_offset += ppos[i];
+        if (pval[i] >= valid_table_size) continue;
+        int row = pos_offset >> block_width_shift, col = pos_offset & align_value;
+        const Value_t val = val_table[pval[i]] * alpha;
+        // AddMatMat implementation
+        for (int mm=0; mm<m; mm++) {
+            c[mm*ldc + col] += a[mm*lda + row] * val;
+        }
+        // AddMatMat End
+    }
+}
+
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int block_width_shift>
+void sblas_kernel_operation_trans(int m, int n, int k, Value_t *a, int lda, Value_t *c, int ldc,
+    Value_t alpha, PosIndex_t* ppos, ValIndex_t* pval, int pos_len, Value_t *val_table, int valid_table_size) {
+    // C^T = B * A^T
+    int pos_offset = 0;
+    const int mm = m&~7;
+    const int align_value = (1<<block_width_shift) - 1;
+    for (int i=0; i<pos_len; i++) {
+        pos_offset += ppos[i];
+        if (pval[i] >= valid_table_size) continue;
+        int row = pos_offset >> block_width_shift, col = pos_offset & align_value;
+        const Value_t val = val_table[pval[i]] * alpha;
+        // AddMatMat implementation
+        Value_t *cc = &c[col * ldc], *aa = &a[row * lda];
+        for (int j=0; j<mm; j+=8) {
+            cc[j+0] += aa[j+0] * val;
+            cc[j+1] += aa[j+1] * val;
+            cc[j+2] += aa[j+2] * val;
+            cc[j+3] += aa[j+3] * val;
+            cc[j+4] += aa[j+4] * val;
+            cc[j+5] += aa[j+5] * val;
+            cc[j+6] += aa[j+6] * val;
+            cc[j+7] += aa[j+7] * val;
+        }
+        for (int j=mm; j<m; j++) {
+            cc[j] += aa[j] * val;
+        }
+        // AddMatMat End
+    }
+}
+
 /*
  * @brief matrix multiplication
  * C = A * B^T
@@ -208,52 +257,22 @@ void sblas_kernel_operation(int m, int n, int k, Value_t *a, int lda, Value_t *s
     Value_t alpha, PosIndex_t* ppos, ValIndex_t* pval, int pos_len, Value_t *val_table, int valid_table_size) {
     const int align_value = (1<<block_width_shift) - 1;
     if (sa == nullptr || sc == NULL) {
-        int pos_offset = 0;
-        for (int i=0; i<pos_len; i++) {
-            pos_offset += ppos[i];
-            if (pval[i] >= valid_table_size) continue;
-            int row = pos_offset >> block_width_shift, col = pos_offset & align_value;
-            const Value_t val = val_table[pval[i]] * alpha;
-            // AddMatMat implementation
-            for (int mm=0; mm<m; mm++) {
-                c[mm*ldc + col] += a[mm*lda + row] * val;
-            }
-            // AddMatMat End
-        }
+        sblas_kernel_operation_naive<PosIndex_t, ValIndex_t, Value_t, block_width_shift>(m, n, k, a, lda, c, ldc, alpha, ppos, pval, pos_len, val_table, valid_table_size);
     } else {
         sblas_trans_kernel(a, m, k, lda, sa, ldsa); // trans a
         sblas_trans_kernel(c, m, n, ldc, sc, ldsc); // trans c
-        // C^T = B * A^T
-        int pos_offset = 0;
-        const int mm = m&~7;
-        for (int i=0; i<pos_len; i++) {
-            pos_offset += ppos[i];
-            if (pval[i] >= valid_table_size) continue;
-            int row = pos_offset >> block_width_shift, col = pos_offset & align_value;
-            const Value_t val = val_table[pval[i]] * alpha;
-            // AddMatMat implementation
-            Value_t *cc = &sc[col * ldsc], *aa = &sa[row * ldsa];
-            for (int j=0; j<mm; j+=8) {
-                cc[j+0] += aa[j+0] * val;
-                cc[j+1] += aa[j+1] * val;
-                cc[j+2] += aa[j+2] * val;
-                cc[j+3] += aa[j+3] * val;
-                cc[j+4] += aa[j+4] * val;
-                cc[j+5] += aa[j+5] * val;
-                cc[j+6] += aa[j+6] * val;
-                cc[j+7] += aa[j+7] * val;
-            }
-            for (int j=mm; j<m; j++) {
-                cc[j] += aa[j] * val;
-            }
-            // AddMatMat End
-        }
+        // C^T = B^T * A^T
+        sblas_kernel_operation_trans<PosIndex_t, ValIndex_t, Value_t, block_width_shift>(m, n, k, sa, ldsa, sc, ldsc, alpha, ppos, pval, pos_len, val_table, valid_table_size);
         sblas_trans_kernel(sc, n, m, ldsc, c, ldc); // trans c
     }
 }
 
 template void sblas_beta_operation_kernel<float>(float* c, int m, int n, int ldc, float beta);
 template void sblas_trans_kernel(float* a, int m, int n, int lda, float* sa, int ldsa);
-template void sblas_kernel_operation<uint8_t, uint8_t, float, 5>(int m, int n, int k, float *a, int lda, float *sa, int ldsa, float *c,
+template void sblas_kernel_operation_naive<uint8_t, uint8_t, float, SBLAS_BLOCK_SHIFT>(int m, int n, int k, float *a, int lda, float *c, int ldc,
+                                    float alpha, uint8_t* ppos, uint8_t* pval, int pos_len, float *val_table, int valid_table_size);
+template void sblas_kernel_operation_trans<uint8_t, uint8_t, float, SBLAS_BLOCK_SHIFT>(int m, int n, int k, float *a, int lda, float *c, int ldc,
+                                    float alpha, uint8_t* ppos, uint8_t* pval, int pos_len, float *val_table, int valid_table_size);
+template void sblas_kernel_operation<uint8_t, uint8_t, float, SBLAS_BLOCK_SHIFT>(int m, int n, int k, float *a, int lda, float *sa, int ldsa, float *c,
                                     int ldc, float *sc, int ldsc, float alpha, uint8_t* ppos, uint8_t* pval, int pos_len, float *val_table, int valid_table_size);
 

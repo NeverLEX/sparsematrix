@@ -22,7 +22,7 @@ enum SBLAS_TRANSPOSE {
     SblasTrans   = 1
 };
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift = 5>
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift = SBLAS_BLOCK_SHIFT>
 class SparseMatrix {
 public:
     SparseMatrix() {}
