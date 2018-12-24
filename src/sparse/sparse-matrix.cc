@@ -4,8 +4,8 @@
 
 namespace sblas {
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift, const int32 matrix_block_width>
-void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>::Destroy() {
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift>
+void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::Destroy() {
     pos_index_.clear();
     val_index_.clear();
     val_table_.clear();
@@ -15,9 +15,10 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
     cols_ = 0;
 }
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift, const int32 matrix_block_width>
-void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>::CopyForm(const ValIndex_t *density_matrix, int32 rows, int32 cols, int32 stride, const Value_t *vals, int32 val_table_size, SBLAS_TRANSPOSE trans) {
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift>
+void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::CopyForm(const ValIndex_t *density_matrix, int32 rows, int32 cols, int32 stride, const Value_t *vals, int32 val_table_size, SBLAS_TRANSPOSE trans) {
     // if PosIndex_t = uint8_t, zero_pad_interval = 255
+    const int32 matrix_block_width = (1<<block_width_shift);
     const int32 zero_pad_interval = (1<<(sizeof(PosIndex_t)*8)) - 1;
     Destroy();
     SBLAS_ASSERT(val_table_size >= 0 && val_table_size<=zero_pad_interval);
@@ -32,7 +33,7 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
                 int32 prev_index = 0, left_bound = pos_index_.size();
                 const ValIndex_t *block_matrix = &density_matrix[i * stride + j];
                 const int32 row_width = rows - i >= matrix_block_width ? matrix_block_width : rows - i;
-                const int32 col_width = cols - j >= matrix_block_width ? matrix_block_width : cols - j;  
+                const int32 col_width = cols - j >= matrix_block_width ? matrix_block_width : cols - j;
                 for (int32 ii=0; ii<row_width; ii++) {
                     const int32 offset = ii*matrix_block_width;
                     const ValIndex_t *prows = &block_matrix[ii*stride];
@@ -65,7 +66,7 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
                 int32 prev_index = 0, left_bound = pos_index_.size();
                 const ValIndex_t *block_matrix = &density_matrix[j * stride + i];
                 const int32 col_width = cols - i >= matrix_block_width ? matrix_block_width : cols - i;
-                const int32 row_width = rows - j >= matrix_block_width ? matrix_block_width : rows - j;  
+                const int32 row_width = rows - j >= matrix_block_width ? matrix_block_width : rows - j;
                 for (int32 ii=0; ii<col_width; ii++) {
                     const int32 offset = ii*matrix_block_width;
                     for (int32 jj=0; jj<row_width; jj++) {
@@ -94,8 +95,8 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
     }
 }
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift, const int32 matrix_block_width>
-void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>::CopyTo(Value_t *density_matrix, int32 stride, SBLAS_TRANSPOSE trans) {
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift>
+void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::CopyTo(Value_t *density_matrix, int32 stride, SBLAS_TRANSPOSE trans) {
     const int32 align_value = (1<<block_width_shift) - 1;
     const int32 pos_size = pos_index_.size(), val_size = val_index_.size(), valid_table_size = val_table_.size() - 1;
     SBLAS_ASSERT(pos_size == val_size);
@@ -132,9 +133,9 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
     }
 }
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift, const int32 matrix_block_width>
-void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>::AddMatMat(Value_t *a, int32 m, int32 lda, Value_t *c, int32 ldc, Value_t alpha, Value_t beta) {
-    const int32 align_value = (1<<block_width_shift) - 1;
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift>
+void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::AddMatMat(Value_t *a, int32 m, int32 lda, Value_t *c, int32 ldc, Value_t alpha, Value_t beta) {
+    const int32 matrix_block_width = (1<<block_width_shift);
     const int32 pos_size = pos_index_.size(), val_size = val_index_.size(), valid_table_size = val_table_.size() - 1;
     SBLAS_ASSERT(pos_size == val_size);
     PosIndex_t *ppos = &pos_index_[0];
@@ -142,38 +143,32 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
     int32 pos_offset = 0;
     const int32 k = rows_, n = cols_;
     if (beta != 1.0) {
-        for (int32 i=0; i<m; i++) {
-            Value_t *cc = &c[i*ldc];
-            for (int32 j=0; j<n; j++) {
-                cc[j] *= beta;
-            }
-        }
+        sblas_beta_operation_kernel(c, m, n, ldc, beta);
     }
     if (alpha != 0.0) {
+        const int32 aligned_m = (m + 7) & (~7);
+        void *p_tmp = nullptr;
+        p_tmp = SBLAS_MEMALIGN(8, 2*aligned_m*matrix_block_width*sizeof(Value_t), &p_tmp);
+        Value_t *sa = (Value_t*)p_tmp, *sc = sa ? sa + aligned_m*matrix_block_width : nullptr;
         for (int32 i=0; i<block_bounds_.size(); i++) {
-            int32 pos_offset = 0;
             const int32 row_off = block_bounds_[i].first;
             const int32 col_off = block_bounds_[i].second;
+            const int32 row_width = rows_ - row_off >= matrix_block_width ? matrix_block_width : rows_ - row_off;
+            const int32 col_width = cols_ - col_off >= matrix_block_width ? matrix_block_width : cols_ - col_off;
             const int32 start = block_index_bounds_[i].first;
             const int32 end = block_index_bounds_[i].second;
-            for (int32 j=start; j<end; j++) {
-                pos_offset += ppos[j];
-                if (pval[j] == valid_table_size) continue;
-                int32 row = pos_offset >> block_width_shift, col = pos_offset & align_value;
-                const Value_t val = val_table_[pval[j]] * alpha;
-                // AddMatMat implementation
-                for (int32 mm=0; mm<m; mm++) {
-                    c[mm*ldc + col_off + col] += a[mm*lda + row_off + row] * val;
-                }
-                // AddMatMat End
-            }
+            // m, n, k, a, lda, c, ldc, alpha, pos, val, val_table
+            sblas_kernel_operation<PosIndex_t, ValIndex_t, Value_t, block_width_shift>(m, col_width, row_width,
+                                    &a[row_off], lda, sa, aligned_m, &c[col_off], ldc, sc, aligned_m,
+                                    alpha, &ppos[start], &pval[start], end-start, &val_table_[0], valid_table_size);
         }
+        SBLAS_MEMALIGN_FREE(p_tmp)
     }
 }
 
 // TEST
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift, const int32 matrix_block_width>
-bool SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>::operator==(const SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>& oth) {
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift>
+bool SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::operator==(const SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>& oth) {
     if (this->pos_index_ != oth.pos_index_) return false;
     if (this->val_index_ != oth.val_index_) return false;
     if (this->val_table_ != oth.val_table_) return false;
@@ -184,8 +179,8 @@ bool SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_blo
     return true;
 }
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift, const int32 matrix_block_width>
-bool SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>::SelfTest() {
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift>
+bool SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>::SelfTest() {
     if (true) {
         const int32 rows = 3, cols = 2, stride = 2;
         Value_t test_val_table[8] = {1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8};

@@ -10,8 +10,8 @@ EXTRA_LDLIBS =
 ADDLIBS = 
 
 LIBS = libsparsematrix.a
-OBJECT = sparse-matrix.o
-BINS = sparse-matrix_test
+OBJECT = kernel.o sparse-matrix.o
+BINS = kernel_test sparse-matrix_test
 
 all: $(BINS) $(LIBS)
 

@@ -3,14 +3,10 @@
 #pragma once
 
 #include <iostream>
-#include <cassert>
 #include <vector>
 #include <stdio.h>
 #include <string.h>
-
-#define SBLAS_ASSERT assert
-#define SBLAS_MALLOC malloc
-#define SBLAS_FREE   free
+#include "kernel.h"
 
 typedef int8_t int8;
 typedef int16_t int16;
@@ -26,7 +22,7 @@ enum SBLAS_TRANSPOSE {
     SblasTrans   = 1
 };
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift = 5, const int32 matrix_block_width = (1<<block_width_shift)>
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift = 5>
 class SparseMatrix {
 public:
     SparseMatrix() {}
@@ -43,7 +39,7 @@ public:
     int32 NumRows() const { return rows_; }
     int32 NumCols() const { return cols_; }
 
-    bool operator==(const SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift, matrix_block_width>& oth);
+    bool operator==(const SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>& oth);
     bool SelfTest();
 
 private:
