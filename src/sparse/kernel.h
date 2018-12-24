@@ -4,6 +4,20 @@
 
 #include <iostream>
 #include <cassert>
+#include <stdlib.h>
+
+#if defined(_MSC_VER)
+# define WIN32_LEAN_AND_MEAN
+# define NOMINMAX
+# include <windows.h>
+#endif
+
+#ifdef _MSC_VER
+#include <stdio.h>
+#define unlink _unlink
+#else
+#include <unistd.h>
+#endif
 
 #define SBLAS_ASSERT assert
 #define SBLAS_MALLOC malloc

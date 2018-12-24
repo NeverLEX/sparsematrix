@@ -1,8 +1,5 @@
 include ../../Makefile.inc
 
-AR=ar
-ARFLAGS=-crv
-CXX=g++
 CXXFLAGS +=
 LDFLAGS +=
 LDLIBS +=
@@ -14,6 +11,8 @@ OBJECT = kernel.o sparse-matrix.o
 BINS = kernel_test sparse-matrix_test
 
 all: $(BINS) $(LIBS)
+
+mobile: $(LIBS)
 
 $(BINS):$(OBJECT) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $@.cc $(OBJECT) $(LDLIBS) $(LIBS) $(EXTRA_LDLIBS) $(ADDLIBS)

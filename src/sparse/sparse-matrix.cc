@@ -1,5 +1,7 @@
 #include <iostream>
 #include <cmath>
+#include <random>
+#include <algorithm>
 #include "sparse-matrix.h"
 
 namespace sblas {

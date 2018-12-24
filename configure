@@ -5,33 +5,54 @@ function usage {
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
 Configuration:
-  -h, --help              display this help and exit
-  -p, --prefix            specify the install path
-  -d, --blas-root         specify the compiled blas bin/lib/include path
+  --help                  display this help and exit
+  --prefix                specify the install path
+  --blas-root             specify the compiled blas bin/lib/include path
+  --ar                    AR
+  --as                    AS
+  --runlib                RUNLIB
+  --cxx                   CXX
+  --cxxflags              CXXFLAGS
 
 EOF
 }
 
-prefix=
+ar=ar
+as=
+runlib=
+cxx=g++
+cxxflags=" -std=c++11 -fPIC -O2"
+prefix=/usr/local
 blas_root=
 while [ $# -gt 0 ];
 do
   case "$1" in
-  --help | -h)
+  --help)
     usage; exit 0 ;;
-  --prefix=* | -p=*)
+  --ar=*)
+    ar=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  --as=*)
+    as=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  --runlib=*)
+    runlib=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  --cxx=*)
+    cxx=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  --cxxflags=*)
+    cxxflags=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
+  --prefix=*)
     prefix=`expr "X$1" : '[^=]*=\(.*\)'`;
     shift;;
-  --blas-root=* | -d=*)
+  --blas-root=*)
     blas_root=`expr "X$1" : '[^=]*=\(.*\)'`;
     shift;;
   *)  echo "Unknown argument: $1, exiting"; usage; exit 1 ;;
   esac
 done
-
-if [ -z $prefix ]; then
-    prefix=/usr/local
-fi
 
 prefix=${prefix/#~/$HOME}
 blas_root=${blas_root/#~/$HOME}
@@ -54,7 +75,9 @@ echo BLAS_ROOT:$blas_root
 cat > Makefile.inc <<EOF
 PREFIX=$prefix
 BLAS_ROOT=$blas_root
-CXXFLAGS= -std=c++11 -fPIC -O2
+AR=$ar
+AS=$as
+RANLIB=$runlib
+CXX=$cxx
+CXXFLAGS=$cxxflags
 EOF
-
-

@@ -1,8 +1,5 @@
 include ../../Makefile.inc
 
-AR=ar
-ARFLAGS=-crv
-CXX=g++
 CXXFLAGS += -I../sparse -I$(BLAS_ROOT)/include
 LDFLAGS += -L$(BLAS_ROOT)/lib
 LDLIBS +=
@@ -14,6 +11,8 @@ OBJECT =
 BINS = blas_test
 
 all: $(BINS) $(LIBS)
+
+mobile: $(LIBS)
 
 $(BINS):$(OBJECT) $(LIBS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $@.cc $(OBJECT) $(LDLIBS) $(LIBS) $(EXTRA_LDLIBS) $(ADDLIBS)
