@@ -13,6 +13,7 @@ Configuration:
   --runlib                RUNLIB
   --cxx                   CXX
   --cxxflags              CXXFLAGS
+  --target                TARGET
 
 EOF
 }
@@ -21,9 +22,10 @@ ar=ar
 as=
 runlib=
 cxx=g++
-cxxflags=" -std=c++11 -fPIC -O2"
+cxxflags=" -std=c++11 -fPIC -O2 -fvisibility=hidden"
 prefix=/usr/local
 blas_root=
+target=
 while [ $# -gt 0 ];
 do
   case "$1" in
@@ -50,6 +52,9 @@ do
   --blas-root=*)
     blas_root=`expr "X$1" : '[^=]*=\(.*\)'`;
     shift;;
+  --target=*)
+    target=`expr "X$1" : '[^=]*=\(.*\)'`;
+    shift;;
   *)  echo "Unknown argument: $1, exiting"; usage; exit 1 ;;
   esac
 done
@@ -69,6 +74,20 @@ else
     fi
 fi
 
+extra_cxxflags=
+if [ "$target" == "HASWELL" ]; then
+  extra_cxxflags="-DHAVE_FMA -DHAVE_AVX2 -mavx -mavx2 -mfma"
+elif [ "$target" == "SANDYBRIDGE" ]; then
+  extra_cxxflags="-DHAVE_AVX -mavx"
+elif [ "$target" == "ARM64" ]; then
+  extra_cxxflags="-DARM64"
+elif [ "$target" == "ARMV7" ]; then
+  extra_cxxflags="-DARMV7"
+elif [ ! -z $target ]; then
+  echo "Unknown TARGET."
+  exit 1
+fi
+
 echo PREFIX:$prefix
 echo BLAS_ROOT:$blas_root
 
@@ -80,4 +99,5 @@ AS=$as
 RANLIB=$runlib
 CXX=$cxx
 CXXFLAGS=$cxxflags
+CXXFLAGS+=$extra_cxxflags
 EOF

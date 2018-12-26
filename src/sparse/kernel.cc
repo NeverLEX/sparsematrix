@@ -1,4 +1,9 @@
 #include "kernel.h"
+#if defined(HAVE_AVX) || defined(HAVE_AVX2) || defined(HAVE_FMA)
+#include <xmmintrin.h>
+#include <tmmintrin.h>
+#include <immintrin.h>
+#endif
 
 template<typename type_t>
 void sblas_beta_operation_kernel(type_t* c, int m, int n, int ldc, type_t beta) {
@@ -369,6 +374,108 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
         Value_t val = val_list[i];
         // AddMatMat implementation
         Value_t *cc = &c[col * ldc], *aa = a;
+#if defined(HAVE_AVX2) && defined(HAVE_FMA)
+#if 1
+        // 117 * 1023 * 2048 7.5ms
+        __asm__ __volatile__ (
+            "movq %0, %%r8\n\t"
+            "movq %1, %%r9\n\t"
+            "movl %2, %%r10d\n\t"
+            "shrl $3, %%r10d\n\t" // r10d = mm/8
+            "vbroadcastss %3, %%ymm0\n\t"
+            ".loop_inner1_0%=:\n\t"
+            "cmpl $4, %%r10d\n\t"
+            "jl .loop_inner1_1%=\n\t"
+            "vmovups  0*4(%%r8), %%ymm1\n\t"
+            "vmovups  8*4(%%r8), %%ymm2\n\t"
+            "vmovups 16*4(%%r8), %%ymm3\n\t"
+            "vmovups 24*4(%%r8), %%ymm4\n\t"
+            "vfmadd231ps  0*4(%%r9), %%ymm0, %%ymm1\n\t" // r9 = aa, ymm0 = val
+            "vfmadd231ps  8*4(%%r9), %%ymm0, %%ymm2\n\t" // r9 = aa, ymm0 = val
+            "vfmadd231ps 16*4(%%r9), %%ymm0, %%ymm3\n\t" // r9 = aa, ymm0 = val
+            "vfmadd231ps 24*4(%%r9), %%ymm0, %%ymm4\n\t" // r9 = aa, ymm0 = val
+            "vmovups %%ymm0,  0*4(%%r8)\n\t"
+            "vmovups %%ymm1,  8*4(%%r8)\n\t"
+            "vmovups %%ymm2, 16*4(%%r8)\n\t"
+            "vmovups %%ymm3, 24*4(%%r8)\n\t"
+            "addq $ 32*4, %%r8\n\t"
+            "addq $ 32*4, %%r9\n\t"
+            "subl $4, %%r10d\n\t"
+            "jnz .loop_inner1_0%=\n\t"
+            ".loop_inner1_1%=:\n\t"
+            "vmovups (%%r8), %%ymm2\n\t"
+            "vfmadd231ps (%%r9), %%ymm0, %%ymm2\n\t" // r9 = aa, ymm0 = val
+            "vmovups %%ymm2, (%%r8)\n\t"
+            "addq $ 8*4, %%r8\n\t"
+            "addq $ 8*4, %%r9\n\t"
+            "subl $ 1, %%r10d\n\t"
+            "jnz .loop_inner1_1%=\n\t"
+            ".loop_inner_end%=:\n\t"
+            :"+r"(cc)                               // output
+            :"r"(aa),"r"(mm),"rm"(val)              // input
+            :"%r8", "%r9", "%r10", "memory"         // clobbered register
+        );
+#else
+        __m256 *mcc = (__m256*)cc, *maa = (__m256*)aa;
+        for (int j=0; j<mm; j+=8) {
+            *mcc = _mm256_fmadd_ps(*maa, _mm256_broadcast_ss(&val), *mcc);
+            maa++; mcc++;
+        }
+#endif
+#elif defined(HAVE_AVX)
+#if 1
+        // 117 * 1023 * 2048 7.8ms
+        __asm__ __volatile__ (
+            "movq %0, %%r8\n\t"
+            "movq %1, %%r9\n\t"
+            "movl %2, %%r10d\n\t"
+            "shrl $3, %%r10d\n\t" // r10d = mm/8
+            "vbroadcastss %3, %%ymm0\n\t"
+            ".loop_inner1_0%=:\n\t"
+            "cmpl $4, %%r10d\n\t"
+            "jl .loop_inner1_1%=\n\t"
+            "vmulps  0*4(%%r9), %%ymm0, %%ymm1\n\t" // r9 = aa, ymm0 = val
+            "vmulps  8*4(%%r9), %%ymm0, %%ymm2\n\t" // r9 = aa, ymm0 = val
+            "vmulps 16*4(%%r9), %%ymm0, %%ymm3\n\t" // r9 = aa, ymm0 = val
+            "vmulps 24*4(%%r9), %%ymm0, %%ymm4\n\t" // r9 = aa, ymm0 = val
+            "vaddps  0*4(%%r8), %%ymm1, %%ymm5\n\t"
+            "vaddps  8*4(%%r8), %%ymm2, %%ymm6\n\t"
+            "vaddps 16*4(%%r8), %%ymm3, %%ymm7\n\t"
+            "vaddps 24*4(%%r8), %%ymm4, %%ymm8\n\t"
+            "vmovups %%ymm5,  0*4(%%r8)\n\t"
+            "vmovups %%ymm6,  8*4(%%r8)\n\t"
+            "vmovups %%ymm7, 16*4(%%r8)\n\t"
+            "vmovups %%ymm8, 24*4(%%r8)\n\t"
+            "addq $ 32*4, %%r8\n\t"
+            "addq $ 32*4, %%r9\n\t"
+            "subl $4, %%r10d\n\t"
+            "jnz .loop_inner1_0%=\n\t"
+            ".loop_inner1_1%=:\n\t"
+            "vmulps (%%r9), %%ymm0, %%ymm1\n\t" // r9 = aa, ymm0 = val
+            "vaddps (%%r8), %%ymm1, %%ymm2\n\t"
+            "vmovups %%ymm2, (%%r8)\n\t"
+            "addq $ 8*4, %%r8\n\t"
+            "addq $ 8*4, %%r9\n\t"
+            "subl $ 1, %%r10d\n\t"
+            "jnz .loop_inner1_1%=\n\t"
+            ".loop_inner_end%=:\n\t"
+            :"+r"(cc)                               // output
+            :"r"(aa),"r"(mm),"rm"(val)              // input
+            :"%r8", "%r9", "%r10", "memory"         // clobbered register
+        );
+#else
+        __m256 *mcc = (__m256*)cc, *maa = (__m256*)aa;
+        for (int j=0; j<mm; j+=8) {
+            *mcc = _mm256_add_ps(*mcc, _mm256_mul_ps(*maa, _mm256_broadcast_ss(&val)));
+            maa++; mcc++;
+        }
+#endif
+/*
+#elif (ARM64)
+
+#elif (ARMV7)
+*/
+#else
         for (int j=0; j<mm; j+=8) {
             cc[j+0] += aa[j+0] * val;
             cc[j+1] += aa[j+1] * val;
@@ -379,6 +486,7 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
             cc[j+6] += aa[j+6] * val;
             cc[j+7] += aa[j+7] * val;
         }
+#endif
         for (int j=mm; j<m; j++) {
             cc[j] += aa[j] * val;
         }
