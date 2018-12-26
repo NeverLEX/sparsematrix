@@ -22,7 +22,7 @@ enum SBLAS_TRANSPOSE {
     SblasTrans   = 1
 };
 
-template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_width_shift = SBLAS_BLOCK_SHIFT>
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int32 block_row_shift = SBLAS_BLOCK_ROW_SHIFT, const int32 block_col_shift = SBLAS_BLOCK_COL_SHIFT>
 class SparseMatrix {
 public:
     SparseMatrix() {}
@@ -39,7 +39,7 @@ public:
     int32 NumRows() const { return rows_; }
     int32 NumCols() const { return cols_; }
 
-    bool operator==(const SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_width_shift>& oth);
+    bool operator==(const SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_row_shift, block_col_shift>& oth);
     bool SelfTest();
 
 private:

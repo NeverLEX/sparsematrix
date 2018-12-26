@@ -29,7 +29,7 @@ void cblas_sgemm_precopy_baseline(int m, int n, int k, float *a, float *b, float
 }
 
 int main(int argc, char *argv[]) {
-    StepList arg_m("3"), arg_n("1024"), arg_k("1024");
+    StepList arg_m("117"), arg_n("1023"), arg_k("2047");
     if (argc >= 2) arg_m.Parse(argv[1]);
     if (argc >= 3) arg_n.Parse(argv[2]);
     if (argc >= 4) arg_k.Parse(argv[3]);
