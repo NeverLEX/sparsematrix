@@ -154,8 +154,11 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_row_shift, block_col_sh
 #ifdef TRANS_MULTIPLICATION
         const int32 aligned_m = (m + 7) & (~7);
         void *p_tmp = nullptr;
-        Value_t *sa = (Value_t*)SBLAS_MEMALIGN(8, aligned_m*matrix_block_row_width*sizeof(Value_t), &p_tmp);
-        Value_t *sc = (Value_t*)SBLAS_MEMALIGN(8, aligned_m*matrix_block_col_width*sizeof(Value_t), &p_tmp);
+        if(NULL == (Value_t*)SBLAS_MEMALIGN(8, aligned_m*(matrix_block_col_width + matrix_block_row_width)*sizeof(Value_t), &p_tmp)) {
+            printf("AddMatMat malloc failed!\n");
+            return;
+        }
+        Value_t *sc = (Value_t*)p_tmp, *sa = sc + aligned_m*matrix_block_col_width;
         int32 prev_row_off = -1;
 #endif
         for (int32 i=0; i<block_bounds_.size(); i++) {
@@ -180,13 +183,12 @@ void SparseMatrix<PosIndex_t, ValIndex_t, Value_t, block_row_shift, block_col_sh
             }
             sblas_trans_kernel(&c[col_off], m, col_width/*n*/, ldc, sc, aligned_m/*ldsc*/); // trans c
             // C^T = B^T * A^T
-            sblas_kernel_operation_trans<PosIndex_t, ValIndex_t, Value_t, block_col_shift>(m, col_width, row_width,
+            sblas_kernel_operation_trans_ex<PosIndex_t, ValIndex_t, Value_t, block_col_shift>(m, col_width, row_width,
                                     sa, aligned_m/*ldsa*/, sc, aligned_m/*ldsc*/,
                                     alpha, &ppos[start], &pval[start], end-start, &val_table_[0], valid_table_size);
             sblas_trans_kernel(sc, col_width/*n*/, m, aligned_m/*ldsc*/, &c[col_off], ldc); // trans c
         }
-        SBLAS_MEMALIGN_FREE(sa);
-        SBLAS_MEMALIGN_FREE(sc);
+        SBLAS_MEMALIGN_FREE(p_tmp);
 #endif
     }
 }

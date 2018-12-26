@@ -361,6 +361,246 @@ void sblas_kernel_operation_trans(int m, int n, int k, Value_t *a, int lda, Valu
     }
 }
 
+template<typename Value_t>
+void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_list, Value_t* val_list, int col_len) {
+    const int mm = m & (~7);
+    for (int i=0; i<col_len; i++) {
+        int col = col_list[i];
+        Value_t val = val_list[i];
+        // AddMatMat implementation
+        Value_t *cc = &c[col * ldc], *aa = a;
+        for (int j=0; j<mm; j+=8) {
+            cc[j+0] += aa[j+0] * val;
+            cc[j+1] += aa[j+1] * val;
+            cc[j+2] += aa[j+2] * val;
+            cc[j+3] += aa[j+3] * val;
+            cc[j+4] += aa[j+4] * val;
+            cc[j+5] += aa[j+5] * val;
+            cc[j+6] += aa[j+6] * val;
+            cc[j+7] += aa[j+7] * val;
+        }
+        for (int j=mm; j<m; j++) {
+            cc[j] += aa[j] * val;
+        }
+    }
+}
+
+#define SBLAS_KERNEL_MUL_8(m) \
+            cc##m[0] += aa[0] * bbx[m]; \
+            cc##m[1] += aa[1] * bbx[m]; \
+            cc##m[2] += aa[2] * bbx[m]; \
+            cc##m[3] += aa[3] * bbx[m]; \
+            cc##m[4] += aa[4] * bbx[m]; \
+            cc##m[5] += aa[5] * bbx[m]; \
+            cc##m[6] += aa[6] * bbx[m]; \
+            cc##m[7] += aa[7] * bbx[m]; \
+            cc##m += 8;
+
+#define SBLAS_KERNEL_MUL_4(m) \
+            cc##m[0] += aa[0] * bbx[m]; \
+            cc##m[1] += aa[1] * bbx[m]; \
+            cc##m[2] += aa[2] * bbx[m]; \
+            cc##m[3] += aa[3] * bbx[m]; \
+            cc##m += 4;
+
+#define SBLAS_KERNEL_MUL_2(m) \
+            cc##m[0] += aa[0] * bbx[m]; \
+            cc##m[1] += aa[1] * bbx[m]; \
+            cc##m += 2;
+
+#define SBLAS_KERNEL_MUL_1(m) \
+            cc##m[0] += aa[0] * bbx[m]
+
+template<typename Value_t>
+void sblas_kernel_mul(int m, Value_t *a, Value_t *c, int ldc, int* col_list, Value_t* val_list, int col_len) {
+    Value_t *cc0, *cc1, *cc2, *cc3, *cc4, *cc5, *cc6, *cc7;
+    Value_t *bb = val_list, *bbx = bb, *aa = a;
+    int *col = col_list;
+
+    int nn = (col_len>>3);
+    while (nn>0) {
+        bbx = bb;
+        bb += 8;
+        cc0 = &c[col[0] * ldc];
+        cc1 = &c[col[1] * ldc];
+        cc2 = &c[col[2] * ldc];
+        cc3 = &c[col[3] * ldc];
+        cc4 = &c[col[4] * ldc];
+        cc5 = &c[col[5] * ldc];
+        cc6 = &c[col[6] * ldc];
+        cc7 = &c[col[7] * ldc];
+        col += 8;
+        aa = a;
+        int mm = (m>>3);
+        while (mm>0) {
+            SBLAS_KERNEL_MUL_8(0);
+            SBLAS_KERNEL_MUL_8(1);
+            SBLAS_KERNEL_MUL_8(2);
+            SBLAS_KERNEL_MUL_8(3);
+            SBLAS_KERNEL_MUL_8(4);
+            SBLAS_KERNEL_MUL_8(5);
+            SBLAS_KERNEL_MUL_8(6);
+            SBLAS_KERNEL_MUL_8(7);
+            aa  += 8;
+            mm--;
+        }
+        if (m&4) {
+            SBLAS_KERNEL_MUL_4(0);
+            SBLAS_KERNEL_MUL_4(1);
+            SBLAS_KERNEL_MUL_4(2);
+            SBLAS_KERNEL_MUL_4(3);
+            SBLAS_KERNEL_MUL_4(4);
+            SBLAS_KERNEL_MUL_4(5);
+            SBLAS_KERNEL_MUL_4(6);
+            SBLAS_KERNEL_MUL_4(7);
+            aa  += 4;
+        }
+        if (m&2) {
+            SBLAS_KERNEL_MUL_2(0);
+            SBLAS_KERNEL_MUL_2(1);
+            SBLAS_KERNEL_MUL_2(2);
+            SBLAS_KERNEL_MUL_2(3);
+            SBLAS_KERNEL_MUL_2(4);
+            SBLAS_KERNEL_MUL_2(5);
+            SBLAS_KERNEL_MUL_2(6);
+            SBLAS_KERNEL_MUL_2(7);
+            aa  += 2;
+        }
+        if (m&1) {
+            SBLAS_KERNEL_MUL_1(0);
+            SBLAS_KERNEL_MUL_1(1);
+            SBLAS_KERNEL_MUL_1(2);
+            SBLAS_KERNEL_MUL_1(3);
+            SBLAS_KERNEL_MUL_1(4);
+            SBLAS_KERNEL_MUL_1(5);
+            SBLAS_KERNEL_MUL_1(6);
+            SBLAS_KERNEL_MUL_1(7);
+        }
+        nn--;
+    }
+    if (col_len&4) {
+        bbx = bb;
+        bb += 4;
+        cc0 = &c[col[0] * ldc];
+        cc1 = &c[col[1] * ldc];
+        cc2 = &c[col[2] * ldc];
+        cc3 = &c[col[3] * ldc];
+        col += 4;
+        aa = a;
+        int mm = (m>>3);
+        while (mm>0) {
+            SBLAS_KERNEL_MUL_8(0);
+            SBLAS_KERNEL_MUL_8(1);
+            SBLAS_KERNEL_MUL_8(2);
+            SBLAS_KERNEL_MUL_8(3);
+            aa  += 8;
+            mm--;
+        }
+        if (m&4) {
+            SBLAS_KERNEL_MUL_4(0);
+            SBLAS_KERNEL_MUL_4(1);
+            SBLAS_KERNEL_MUL_4(2);
+            SBLAS_KERNEL_MUL_4(3);
+            aa  += 4;
+        }
+        if (m&2) {
+            SBLAS_KERNEL_MUL_2(0);
+            SBLAS_KERNEL_MUL_2(1);
+            SBLAS_KERNEL_MUL_2(2);
+            SBLAS_KERNEL_MUL_2(3);
+            aa  += 2;
+        }
+        if (m&1) {
+            SBLAS_KERNEL_MUL_1(0);
+            SBLAS_KERNEL_MUL_1(1);
+            SBLAS_KERNEL_MUL_1(2);
+            SBLAS_KERNEL_MUL_1(3);
+        }
+    }
+    if (col_len&2) {
+        bbx = bb;
+        bb += 2;
+        cc0 = &c[col[0] * ldc];
+        cc1 = &c[col[1] * ldc];
+        col += 2;
+        aa = a;
+        int mm = (m>>3);
+        while (mm>0) {
+            SBLAS_KERNEL_MUL_8(0);
+            SBLAS_KERNEL_MUL_8(1);
+            aa  += 8;
+            mm--;
+        }
+        if (m&4) {
+            SBLAS_KERNEL_MUL_4(0);
+            SBLAS_KERNEL_MUL_4(1);
+            aa  += 4;
+        }
+        if (m&2) {
+            SBLAS_KERNEL_MUL_2(0);
+            SBLAS_KERNEL_MUL_2(1);
+            aa  += 2;
+        }
+        if (m&1) {
+            SBLAS_KERNEL_MUL_1(0);
+            SBLAS_KERNEL_MUL_1(1);
+        }
+    }
+    if (col_len&1) {
+        bbx = bb;
+        cc0 = &c[col[0] * ldc];
+        aa = a;
+        int mm = (m>>3);
+        while (mm>0) {
+            SBLAS_KERNEL_MUL_8(0);
+            aa  += 8;
+            mm--;
+        }
+        if (m&4) {
+            SBLAS_KERNEL_MUL_4(0);
+            aa  += 4;
+        }
+        if (m&2) {
+            SBLAS_KERNEL_MUL_2(0);
+            aa  += 2;
+        }
+        if (m&1) {
+            SBLAS_KERNEL_MUL_1(0);
+        }
+    }
+}
+
+template<typename PosIndex_t, typename ValIndex_t, typename Value_t, const int block_col_shift>
+void sblas_kernel_operation_trans_ex(int m, int n, int k, Value_t *a, int lda, Value_t *c, int ldc,
+        Value_t alpha, PosIndex_t* ppos, ValIndex_t* pval, int pos_len, Value_t *val_table, int valid_table_size) {
+    // C^T = B * A^T
+    const int align_value = (1<<block_col_shift) - 1;
+    int col_list[1<<block_col_shift];
+    Value_t val_list[1<<block_col_shift];
+
+    int pos_offset = 0, row_prev = -1, col_len = 0;
+    for (int i=0; i<pos_len; i++) {
+        pos_offset += ppos[i];
+        if (pval[i] >= valid_table_size) continue;
+        const int row = pos_offset >> block_col_shift;
+        if (row_prev != row) {
+            if (row_prev != -1)
+                sblas_kernel_mul_naive<Value_t>(m, &a[row_prev*lda], c, ldc, col_list, val_list, col_len);
+            // next row
+            col_len = 0;
+            row_prev = row;
+            col_list[col_len] = pos_offset & align_value;
+            val_list[col_len++] = val_table[pval[i]] * alpha;
+        } else {
+            col_list[col_len] = pos_offset & align_value;
+            val_list[col_len++] = val_table[pval[i]] * alpha;
+        }
+    }
+    // rest row
+    if (row_prev != -1)
+        sblas_kernel_mul_naive<Value_t>(m, &a[row_prev*lda], c, ldc, col_list, val_list, col_len);
+}
+
 template void sblas_beta_operation_kernel<float>(float* c, int m, int n, int ldc, float beta);
 template void sblas_trans_kernel(float* a, int m, int n, int lda, float* sa, int ldsa);
 template void sblas_kernel_operation<uint8_t, uint8_t, float, SBLAS_BLOCK_COL_SHIFT>(int m, int n, int k, float *a, int lda, float *c, int ldc,
@@ -368,5 +608,7 @@ template void sblas_kernel_operation<uint8_t, uint8_t, float, SBLAS_BLOCK_COL_SH
 template void sblas_kernel_operation_naive<uint8_t, uint8_t, float, SBLAS_BLOCK_COL_SHIFT>(int m, int n, int k, float *a, int lda, float *c, int ldc,
                                     float alpha, uint8_t* ppos, uint8_t* pval, int pos_len, float *val_table, int valid_table_size);
 template void sblas_kernel_operation_trans<uint8_t, uint8_t, float, SBLAS_BLOCK_COL_SHIFT>(int m, int n, int k, float *a, int lda, float *c, int ldc,
+                                    float alpha, uint8_t* ppos, uint8_t* pval, int pos_len, float *val_table, int valid_table_size);
+template void sblas_kernel_operation_trans_ex<uint8_t, uint8_t, float, SBLAS_BLOCK_COL_SHIFT>(int m, int n, int k, float *a, int lda, float *c, int ldc,
                                     float alpha, uint8_t* ppos, uint8_t* pval, int pos_len, float *val_table, int valid_table_size);
 
