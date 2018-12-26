@@ -3,6 +3,8 @@
 #include <xmmintrin.h>
 #include <tmmintrin.h>
 #include <immintrin.h>
+#elif defined(ARM64)
+#include <arm_neon.h>
 #endif
 
 template<typename type_t>
@@ -412,7 +414,7 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
             "jnz .loop_inner1_1%=\n\t"
             ".loop_inner_end%=:\n\t"
             :"+r"(cc)                               // output
-            :"r"(aa),"r"(mm),"rm"(val)              // input
+            :"r"(aa),"r"(mm),"r"(val)               // input
             :"%r8", "%r9", "%r10", "memory"         // clobbered register
         );
 #else
@@ -460,7 +462,7 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
             "jnz .loop_inner1_1%=\n\t"
             ".loop_inner_end%=:\n\t"
             :"+r"(cc)                               // output
-            :"r"(aa),"r"(mm),"rm"(val)              // input
+            :"r"(aa),"r"(mm),"r"(val)               // input
             :"%r8", "%r9", "%r10", "memory"         // clobbered register
         );
 #else
@@ -470,11 +472,99 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
             maa++; mcc++;
         }
 #endif
-/*
-#elif (ARM64)
 
-#elif (ARMV7)
-*/
+#elif defined(ARM64)
+#if 0
+        // 117 * 1023 * 2048 35~44ms NEON
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.den0024a/ch04s06s02.html
+        // 4.6.2 Scalar register sizes
+        // 4.6.3 Vector register sizes
+        __asm__ __volatile__ (
+            "mov x0, %0\n\t"
+            "mov x1, %1\n\t"
+            "mov w2, %w2\n\t"
+            "lsr w2, w2, #3\n\t"
+            "dup v0.4s, %w3\n\t"
+            ".loop_inner1_0%=:\n\t"
+            "cmp w2, #4\n\t"
+            "b.lt .loop_inner1_1%=\n\t"
+
+            "ldp q1, q2, [x0]\n\t"
+            "ldp q3, q4, [x0, #32]\n\t"
+            "fmul v1.4s, v0.4s, v1.4s\n\t"
+            "fmul v2.4s, v0.4s, v2.4s\n\t"
+            "ldp q5, q6, [x0, #64]\n\t"
+            "fmul v3.4s, v0.4s, v3.4s\n\t"
+            "fmul v4.4s, v0.4s, v4.4s\n\t"
+            "ldp q7, q8, [x0, #96]\n\t"
+            "fmul v5.4s, v0.4s, v5.4s\n\t"
+            "fmul v6.4s, v0.4s, v6.4s\n\t"
+            "ldp q9,  q10, [x1]\n\t"            // load cc
+            "ldp q11, q12, [x1, #32]\n\t"
+            "fmul v7.4s, v0.4s, v7.4s\n\t"
+            "fmul v8.4s, v0.4s, v8.4s\n\t"
+
+            "fadd v9.4s,  v1.4s, v9.4s\n\t"
+            "fadd v10.4s, v2.4s, v10.4s\n\t"
+            "ldp q13, q14, [x1, #64]\n\t"      // load cc
+            "ldp q15, q1,  [x1, #96]\n\t"
+            "fadd v11.4s, v3.4s, v11.4s\n\t"
+            "fadd v12.4s, v4.4s, v12.4s\n\t"
+            "stp q9,  q10, [x1]\n\t"
+            "stp q11, q12, [x1, #32]\n\t"
+            "fadd v13.4s, v5.4s, v13.4s\n\t"
+            "fadd v14.4s, v6.4s, v14.4s\n\t"
+            "stp q13, q14, [x1, #64]\n\t"
+            "fadd v15.4s, v7.4s, v15.4s\n\t"
+            "fadd v1.4s,  v8.4s, v1.4s\n\t"
+            "stp q15, q1,  [x1, #96]\n\t"
+
+            "add x0, x0, #128\n\t"
+            "add x1, x1, #128\n\t"
+            "sub w2, w2, #4\n\t"
+            "cmp w2, #0\n\t"
+            "b.ne .loop_inner1_0%=\n\t"
+            ".loop_inner1_1%=:\n\t"
+            
+            "ldp q1, q2, [x0]\n\t"
+            "fmul v1.4s, v0.4s, v1.4s\n\t"
+            "fmul v2.4s, v0.4s, v2.4s\n\t"
+            "ldp q9, q10, [x1]\n\t"            // load cc
+            "fadd v9.4s,  v1.4s, v9.4s\n\t"
+            "fadd v10.4s, v2.4s, v10.4s\n\t"
+            "stp q9, q10, [x1]\n\t"
+
+            "add x0, x0, #32\n\t"
+            "add x1, x1, #32\n\t"
+            "sub w2, w2, #1\n\t"
+            "cmp w2, #0\n\t"
+            "b.ne .loop_inner1_1%=\n\t"
+            ".loop_inner_end%=:\n\t"
+            :"+r"(cc)                               // output
+            :"r"(aa),"r"(mm),"r"(val)               // input
+            :"x0", "x1", "x2", "memory"             // clobbered register
+        );
+#else
+        // 117 * 1023 * 2048 32~40ms
+        float32x4_t bb = {val, val, val, val};
+        float32x4_t *mcc = (float32x4_t*)cc, *maa = (float32x4_t*)aa;
+        for (int j=0; j<mm; j+=8) {
+            mcc[0] = vaddq_f32(mcc[0], vmulq_f32(maa[0], bb));
+            mcc[1] = vaddq_f32(mcc[1], vmulq_f32(maa[1], bb));
+            maa += 2 ; mcc += 2;
+        }
+#endif
+#elif defined(ARMV7)
+        for (int j=0; j<mm; j+=8) {
+            cc[j+0] += aa[j+0] * val;
+            cc[j+1] += aa[j+1] * val;
+            cc[j+2] += aa[j+2] * val;
+            cc[j+3] += aa[j+3] * val;
+            cc[j+4] += aa[j+4] * val;
+            cc[j+5] += aa[j+5] * val;
+            cc[j+6] += aa[j+6] * val;
+            cc[j+7] += aa[j+7] * val;
+        }
 #else
         for (int j=0; j<mm; j+=8) {
             cc[j+0] += aa[j+0] * val;

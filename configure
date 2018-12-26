@@ -80,9 +80,9 @@ if [ "$target" == "HASWELL" ]; then
 elif [ "$target" == "SANDYBRIDGE" ]; then
   extra_cxxflags="-DHAVE_AVX -mavx"
 elif [ "$target" == "ARM64" ]; then
-  extra_cxxflags="-DARM64"
+  extra_cxxflags="-DARM64 -DHAVE_VFPV4 -DHAVE_VFPV3 -DHAVE_VFP -DHAVE_NEON"
 elif [ "$target" == "ARMV7" ]; then
-  extra_cxxflags="-DARMV7"
+  extra_cxxflags="-DARMV7 -DHAVE_VFPV3 -DHAVE_VFP"
 elif [ ! -z $target ]; then
   echo "Unknown TARGET."
   exit 1

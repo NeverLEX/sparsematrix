@@ -18,7 +18,7 @@ export CLANG_FLAGS="-target aarch64-linux-android -D__ANDROID_API__=23 \
 			--as="$NDKROOT/toolchains/aarch64-linux-android-4.9/prebuilt/darwin-x86_64/aarch64-linux-android/bin/as" \
 			--runlib="$NDKROOT/toolchains/aarch64-linux-android-4.9/prebuilt/darwin-x86_64/aarch64-linux-android/bin/ranlib" \
 			--cxx="$NDKROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++" \
-			--cxxflags=" -std=c++11 -fPIC -O2 ${CLANG_FLAGS}" \
+			--cxxflags=" -std=c++11 -fPIC -O2 ${CLANG_FLAGS} -march=armv8-a+crc+crypto+fp+simd -mtune=cortex-a57" \
 			--target="ARM64"
 
 make mobile

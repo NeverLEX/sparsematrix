@@ -18,7 +18,7 @@ export CLANG_FLAGS="-target armv7-linux-androideabi -D__ANDROID_API__=16 -marm -
 			--as="$NDKROOT/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/arm-linux-androideabi/bin/as" \
 			--runlib="$NDKROOT/toolchains/arm-linux-androideabi-4.9/prebuilt/darwin-x86_64/arm-linux-androideabi/bin/ranlib" \
 			--cxx="$NDKROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++" \
-			--cxxflags=" -std=c++11 -fPIC -O2 ${CLANG_FLAGS}" \
+			--cxxflags=" -std=c++11 -fPIC -O2 ${CLANG_FLAGS} -mfpu=neon  -march=armv7-a" \
 			--target="ARMV7"
 
 make mobile
