@@ -414,7 +414,7 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
             "jnz .loop_inner1_1%=\n\t"
             ".loop_inner_end%=:\n\t"
             :"+r"(cc)                               // output
-            :"r"(aa),"r"(mm),"r"(val)               // input
+            :"r"(aa),"r"(mm),"rm"(val)              // input
             :"%r8", "%r9", "%r10", "memory"         // clobbered register
         );
 #else
@@ -462,7 +462,7 @@ void sblas_kernel_mul_naive(int m, Value_t *a, Value_t *c, int ldc, int* col_lis
             "jnz .loop_inner1_1%=\n\t"
             ".loop_inner_end%=:\n\t"
             :"+r"(cc)                               // output
-            :"r"(aa),"r"(mm),"r"(val)               // input
+            :"r"(aa),"r"(mm),"rm"(val)              // input
             :"%r8", "%r9", "%r10", "memory"         // clobbered register
         );
 #else
